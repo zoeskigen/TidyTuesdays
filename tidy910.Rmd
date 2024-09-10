@@ -1,0 +1,48 @@
+---
+title: "TidyTuesday910"
+output: html_document
+date: "2024-09-10"
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+```
+
+```{r setup, include=FALSE}
+college_admissions <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2024/2024-09-10/college_admissions.csv')
+```
+```{r}
+college_admissions|>
+  select(name) |>
+  distinct()
+
+college_admissions |>
+  filter(par_income_bin == 100) |>
+  select(attend) |>
+  summarize(sum(attend, na.rm = TRUE))
+```
+```{r}
+college_admissions |>
+  ggplot(aes(x = par_income_bin, y=attend, color = public)) +
+  geom_point() +
+  geom_line(aes(group=name)) +
+  geom_text(aes(label = ifelse(attend > 0.02, name, "")))
+```
+```{r}
+library(plotly)
+gg1 <- college_admissions |>
+  ggplot(aes(x = par_income_bin, y=attend, color = public, 
+             text = paste0("school: ", name))) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(group=name), 
+            alpha = 0.2) +
+  facet_grid(~public)
+
+gg2 <- ggplotly(gg1, tooltip = "text")
+
+highlight(gg2, on = "plotly_hover", color = "red",
+          selectize = TRUE, dynamic = TRUE)
+
+
+```
+
