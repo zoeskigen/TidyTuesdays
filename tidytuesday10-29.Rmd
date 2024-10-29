@@ -1,0 +1,109 @@
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(ggmosaic)
+library(praise)
+library(rpart.plot)
+```
+
+```{r echo = FALSE}
+monster_movie_genres <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2024/2024-10-29/monster_movie_genres.csv')
+monster_movies <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2024/2024-10-29/monster_movies.csv') |> separate_rows(genres, sep = ",") |>
+  mutate(value = 1) |>
+  pivot_wider(names_from = genres, values_from = value, values_fill = 0)
+```
+maybe change the font to spooky
+
+```{r}
+### |- tidy data ----
+plot_data <- monster_movies |>
+    mutate(title_type = str_to_title(title_type)) |> 
+    mutate(decade = floor(year / 10) * 10) |> 
+    filter(decade >= 1960) |> 
+    drop_na(title_type, decade) |>
+    count(title_type, decade) 
+
+plot_data |>
+  ggplot() +
+  geom_mosaic(aes(weight = n, x = product(decade), fill = title_type)) +
+  theme_void() +
+  labs(title = "proportion of titles in each category per year") +
+  theme(axis.text.x = element_text(),
+        axis.text.y = element_text(),
+        legend.position = "none") +
+  scale_y_continuous() +
+   annotate(
+        "text",
+        x = .55, y = .5, label = "Movies",
+        color = "white", size = 7, vjust = 1, hjust = 0
+    ) +
+    annotate(
+        "text",
+        x = .525, y = .8, label = "TV Movie",
+        color = "white", size = 7, vjust = 1, hjust = 0
+    ) +
+    annotate(
+        "text",
+        x = .55, y = .95, label = "Videos",
+        color = "white", size = 7, vjust = 1, hjust = 0
+    ) +
+  scale_fill_brewer(palette = "Dark2")
+```
+```{r}
+#Linear Regression
+monster_mod <- monster_movies |>
+  select(primary_title, year, runtime_minutes, average_rating,
+         num_votes, Comedy:Music, Short:War)
+
+movie_rec <- recipe(average_rating ~ ., 
+       data = monster_mod) |>
+  update_role(primary_title, new_role = "ID")
+
+movie_mod_lm <- linear_reg() |>
+  set_engine(engine = "lm") |>
+  set_mode(mode = "regression")
+
+movie_wflow_lm <- workflow() |>
+  add_model(movie_mod_lm) |>
+  add_recipe(movie_rec)
+
+movie_wflow_lm |>
+  fit(data = monster_mod) |>
+  predict(new_data = monster_mod) |>
+  cbind(monster_mod) |>
+  ggplot(aes(x = average_rating, y = .pred)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1)
+
+```
+
+```{r}
+movie_mod_cart <- decision_tree() |> 
+  set_engine(engine = "rpart") |> 
+  set_mode(mode = "regression")
+
+movie_wflow_cart <- workflow() |> 
+  add_model(movie_mod_cart) |> 
+  add_recipe(movie_rec)
+
+movie_wflow_cart |> 
+  fit(data = monster_mod) |> 
+  predict(new_data = monster_mod) |> 
+  cbind(monster_mod) |> 
+  ggplot(aes(x = average_rating, y = .pred)) +
+  geom_point()
+```
+## Plotting model
+
+Plotting the decision tree for the regression tree mode
+
+```{r}
+movies_tree <- movie_wflow_cart |> 
+  fit(data = monster_mod) |> 
+  extract_fit_parsnip()
+
+rpart.plot(movies_tree$fit)
+```
+
+
